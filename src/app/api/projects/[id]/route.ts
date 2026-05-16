@@ -2,73 +2,77 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getAuthUser } from '@/lib/auth'
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const user = await getAuthUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const user = await getAuthUser()
+    if (!user) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { id } = params
+  const { id } = await params
 
   try {
-    const project = await prisma.project.findUnique({
-      where: { id },
-      include: {
-        owner: { select: { id: true, name: true, email: true } },
-        members: { select: { id: true, name: true, email: true } },
+        const project = await prisma.project.findUnique({
+                where: { id },
+                include: {
+                          owner: { select: { id: true, name: true, email: true } },
+                          members: { select: { id: true, name: true, email: true } },
+                          tasks: {
+                                      include: {
+                                                    assignedTo: { select: { id: true, name: true } }
+                                      },
+                                      orderBy: { createdAt: 'desc' }
+                          }
+                }
+        })
+
+      if (!project) {
+              return NextResponse.json({ error: 'Project not found' }, { status: 404 })
       }
-    })
 
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    }
-
-    // Check access
-    if (project.ownerId !== user.id) {
-      const isMember = project.members.some(m => m.id === user.id)
-      if (!isMember) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-    }
-
-    return NextResponse.json(project)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(project)
+  } catch (error) {
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const user = await getAuthUser()
-  if (!user || user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const user = await getAuthUser()
+    if (!user || user.role !== 'ADMIN') {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { id } = params
-  const body = await req.json()
+  const { id } = await params
+    const { name, description, memberIds } = await req.json()
 
   try {
-    const project = await prisma.project.update({
-      where: { id },
-      data: body
-    })
-    return NextResponse.json(project)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+        const project = await prisma.project.update({
+                where: { id },
+                data: {
+                          name,
+                          description,
+                          members: {
+                                      set: memberIds?.map((id: string) => ({ id })) || []
+                          }
+                }
+        })
+        return NextResponse.json(project)
+  } catch (error) {
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const user = await getAuthUser()
-  if (!user || user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const user = await getAuthUser()
+    if (!user || user.role !== 'ADMIN') {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { id } = params
+  const { id } = await params
 
   try {
-    await prisma.project.delete({ where: { id } })
-    return NextResponse.json({ message: 'Project deleted' })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+        await prisma.project.delete({ where: { id } })
+        return NextResponse.json({ message: 'Project deleted' })
+  } catch (error) {
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
