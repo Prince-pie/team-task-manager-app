@@ -1,11 +1,17 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-  return new PrismaClient()
+    return new PrismaClient({
+          datasources: {
+                  db: {
+                            url: process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost:5432/dummy"
+                  }
+          }
+    })
 }
 
 declare global {
-  var prisma: undefined | ReturnType<typeof prismaClientSingleton>
+    var prisma: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
 const prisma = globalThis.prisma ?? prismaClientSingleton()
